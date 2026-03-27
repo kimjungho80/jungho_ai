@@ -1,1126 +1,1392 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  buildAllPromptsText,
+  canUseImageSize,
+  CameraDistanceOption,
+  getCameraDistanceLabel,
+  getShotTypeLabel,
+  PoseCategoryOption,
+  PromptCard,
+  ShotTypeOption,
+} from "@/lib/fitbuilder";
 
-type UploadCardProps = {
-  title: string;
-  uploadTitle: string;
-  helper: string;
-  accent?: "green" | "teal";
-  inputId: string;
-  preview: string | null;
-  onFileSelect: (file: File) => void;
-};
-
-type PromptBoxProps = {
-  title: string;
-  placeholder: string;
-  value: string;
-  onChange: (value: string) => void;
-};
-
-type SelectPromptBoxProps = {
-  title: string;
-  selectValue: string;
-  onSelectChange: (value: string) => void;
-  options: { value: string; label: string }[];
-  value: string;
-  onTextChange: (value: string) => void;
-  placeholder: string;
-};
-
-export default function Home() {
-  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
-  const [modelImage, setModelImage] = useState<string | null>(null);
-  const [cloth1Image, setCloth1Image] = useState<string | null>(null);
-  const [cloth2Image, setCloth2Image] = useState<string | null>(null);
-  const [accessory1Image, setAccessory1Image] = useState<string | null>(null);
-  const [accessory2Image, setAccessory2Image] = useState<string | null>(null);
-
-  const [backgroundPrompt, setBackgroundPrompt] = useState("");
-  const [modelPrompt, setModelPrompt] = useState("");
-  const [cloth1Prompt, setCloth1Prompt] = useState("");
-  const [cloth2Prompt, setCloth2Prompt] = useState("");
-  const [accessory1Prompt, setAccessory1Prompt] = useState("");
-  const [accessory2Prompt, setAccessory2Prompt] = useState("");
-  const [lightingPrompt, setLightingPrompt] = useState("");
-  const [filmPrompt, setFilmPrompt] = useState("");
-  const [posePrompt, setPosePrompt] = useState("");
-
-  const [lighting, setLighting] = useState("soft-daylight");
-  const [film, setFilm] = useState("clean-editorial");
-  const [pose, setPose] = useState("natural-standing");
-
-  const [generateMode, setGenerateMode] = useState<"prompt" | "image">(
-    "prompt"
-  );
-
-  const [promptStyle, setPromptStyle] = useState<
-    "lookbook" | "detailpage" | "instagram" | "iphone-ugc"
-  >("lookbook");
-
-  const [promptStrength, setPromptStrength] = useState<
-    "natural" | "detailed" | "commercial"
-  >("natural");
-
-  const [useOutfitLock, setUseOutfitLock] = useState(true);
-
-  const [promptStyleDetail, setPromptStyleDetail] = useState("");
-  const [promptStrengthDetail, setPromptStrengthDetail] = useState("");
-
-  const [ignoreLightingPreset, setIgnoreLightingPreset] = useState(false);
-  const [ignoreFilmPreset, setIgnoreFilmPreset] = useState(false);
-  const [ignorePosePreset, setIgnorePosePreset] = useState(false);
-  const [ignoreStylePreset, setIgnoreStylePreset] = useState(false);
-  const [ignoreStrengthPreset, setIgnoreStrengthPreset] = useState(false);
-
-  const [resultImage, setResultImage] = useState<string | null>(null);
-  const [finalPrompt, setFinalPrompt] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const objectUrlsRef = useRef<string[]>([]);
-
-  const createPreview =
-    (setter: (value: string | null) => void) => (file: File) => {
-      if (!file.type.startsWith("image/")) {
-        alert("이미지 파일만 업로드 가능합니다.");
-        return;
-      }
-
-      const url = URL.createObjectURL(file);
-      objectUrlsRef.current.push(url);
-      setter(url);
-    };
-
-  const buildPreviewPrompt = useMemo(() => {
-    const lightingLabel =
-      {
-        "soft-daylight": "soft daylight",
-        "studio-clean": "clean studio lighting",
-        "warm-hotel": "warm hotel lighting",
-        "moody-editorial": "moody editorial lighting",
-      }[lighting] || lighting;
-
-    const filmLabel =
-      {
-        "clean-editorial": "clean editorial tone",
-        "soft-film": "soft film tone",
-        "luxury-fashion": "luxury fashion mood",
-        "iphone-real": "realistic iPhone photography look",
-      }[film] || film;
-
-    const poseLabel =
-      {
-        "natural-standing": "natural standing pose",
-        "one-hand-bag": "one-hand bag pose",
-        "mirror-selfie": "mirror selfie pose",
-        "lookbook-angle": "lookbook-style angle",
-      }[pose] || pose;
-
-    const styleLabel =
-      {
-        lookbook: "lookbook",
-        detailpage: "detailpage",
-        instagram: "instagram mood",
-        "iphone-ugc": "iphone ugc",
-      }[promptStyle] || promptStyle;
-
-    const strengthLabel =
-      {
-        natural: "natural",
-        detailed: "detailed",
-        commercial: "commercial",
-      }[promptStrength] || promptStrength;
-
-    const lightingText =
-      ignoreLightingPreset && lightingPrompt
-        ? `Lighting detail: ${lightingPrompt}`
-        : [
-            lighting && `Lighting preset: ${lightingLabel}`,
-            lightingPrompt && `Lighting detail: ${lightingPrompt}`,
-          ]
-            .filter(Boolean)
-            .join("\n");
-
-    const filmText =
-      ignoreFilmPreset && filmPrompt
-        ? `Film detail: ${filmPrompt}`
-        : [
-            film && `Film preset: ${filmLabel}`,
-            filmPrompt && `Film detail: ${filmPrompt}`,
-          ]
-            .filter(Boolean)
-            .join("\n");
-
-    const poseText =
-      ignorePosePreset && posePrompt
-        ? `Pose detail: ${posePrompt}`
-        : [
-            pose && `Pose preset: ${poseLabel}`,
-            posePrompt && `Pose detail: ${posePrompt}`,
-          ]
-            .filter(Boolean)
-            .join("\n");
-
-    const styleText =
-      ignoreStylePreset && promptStyleDetail
-        ? `Prompt style detail: ${promptStyleDetail}`
-        : [
-            promptStyle && `Prompt style preset: ${styleLabel}`,
-            promptStyleDetail && `Prompt style detail: ${promptStyleDetail}`,
-          ]
-            .filter(Boolean)
-            .join("\n");
-
-    const strengthText =
-      ignoreStrengthPreset && promptStrengthDetail
-        ? `Prompt strength detail: ${promptStrengthDetail}`
-        : [
-            promptStrength && `Prompt strength preset: ${strengthLabel}`,
-            promptStrengthDetail &&
-              `Prompt strength detail: ${promptStrengthDetail}`,
-          ]
-            .filter(Boolean)
-            .join("\n");
-
-    return [
-      "Create a high-quality fashion image with the following direction.",
-      backgroundPrompt && `Background: ${backgroundPrompt}`,
-      modelPrompt && `Model: ${modelPrompt}`,
-      cloth1Prompt && `Outfit 1: ${cloth1Prompt}`,
-      cloth2Prompt && `Outfit 2: ${cloth2Prompt}`,
-      accessory1Prompt && `Accessory 1: ${accessory1Prompt}`,
-      accessory2Prompt && `Accessory 2: ${accessory2Prompt}`,
-      lightingText,
-      filmText,
-      poseText,
-      styleText,
-      strengthText,
-      useOutfitLock
-        ? "OUTFIT LOCK: Keep the intended outfit silhouette, fit, fabric feel, and key design details consistent."
-        : "",
-      "Keep the styling cohesive, realistic, detailed, and visually polished.",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }, [
-    backgroundPrompt,
-    modelPrompt,
-    cloth1Prompt,
-    cloth2Prompt,
-    accessory1Prompt,
-    accessory2Prompt,
-    lighting,
-    lightingPrompt,
-    film,
-    filmPrompt,
-    pose,
-    posePrompt,
-    promptStyle,
-    promptStyleDetail,
-    promptStrength,
-    promptStrengthDetail,
-    useOutfitLock,
-    ignoreLightingPreset,
-    ignoreFilmPreset,
-    ignorePosePreset,
-    ignoreStylePreset,
-    ignoreStrengthPreset,
-  ]);
-
-  const resetAll = () => {
-    objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    objectUrlsRef.current = [];
-
-    setBackgroundImage(null);
-    setModelImage(null);
-    setCloth1Image(null);
-    setCloth2Image(null);
-    setAccessory1Image(null);
-    setAccessory2Image(null);
-
-    setBackgroundPrompt("");
-    setModelPrompt("");
-    setCloth1Prompt("");
-    setCloth2Prompt("");
-    setAccessory1Prompt("");
-    setAccessory2Prompt("");
-    setLightingPrompt("");
-    setFilmPrompt("");
-    setPosePrompt("");
-
-    setLighting("soft-daylight");
-    setFilm("clean-editorial");
-    setPose("natural-standing");
-
-    setGenerateMode("prompt");
-    setPromptStyle("lookbook");
-    setPromptStrength("natural");
-    setUseOutfitLock(true);
-
-    setPromptStyleDetail("");
-    setPromptStrengthDetail("");
-
-    setIgnoreLightingPreset(false);
-    setIgnoreFilmPreset(false);
-    setIgnorePosePreset(false);
-    setIgnoreStylePreset(false);
-    setIgnoreStrengthPreset(false);
-
-    setResultImage(null);
-    setFinalPrompt("");
-    setLoading(false);
-    setCopied(false);
+type ApiResponse = {
+  ok: boolean;
+  message?: string;
+  referenceMapText: string;
+  prompts: PromptCard[];
+  analysis?: {
+    clothingSummary?: string;
+    recommendedBottom?: string;
+    hairSummary?: string;
+    overallMood?: string;
   };
+};
 
-  const handleGenerate = async () => {
-    try {
-      setLoading(true);
-      setResultImage(null);
-      setFinalPrompt(buildPreviewPrompt);
+type PreviewItem = {
+  id: string;
+  file: File;
+  url: string;
+};
 
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          backgroundPrompt,
-          modelPrompt,
-          cloth1Prompt,
-          cloth2Prompt,
-          accessory1Prompt,
-          accessory2Prompt,
-          lighting,
-          lightingPrompt,
-          film,
-          filmPrompt,
-          pose,
-          posePrompt,
-          generateMode,
-          promptStyle,
-          promptStrength,
-          useOutfitLock,
-          promptStyleDetail,
-          promptStrengthDetail,
-          ignoreLightingPreset,
-          ignoreFilmPreset,
-          ignorePosePreset,
-          ignoreStylePreset,
-          ignoreStrengthPreset,
-        }),
-      });
+type SimpleOption = {
+  key: string;
+  label: string;
+};
 
-      const text = await response.text();
-      let data: any;
+const LIGHTING_OPTIONS = [
+  { key: "auto", label: "자동" },
+  { key: "soft_natural", label: "부드러운 자연광" },
+  { key: "sunlit_natural", label: "햇살이 비치는 자연광" },
+  { key: "warm_indoor", label: "따뜻한 실내 조명" },
+  { key: "hotel_mood", label: "호텔 무드 조명" },
+  { key: "studio_softbox", label: "스튜디오 소프트박스" },
+  { key: "sunset_glow", label: "노을빛 조명" },
+] as const;
 
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(text || "서버 응답을 읽을 수 없습니다.");
-      }
+const FILM_OPTIONS = [
+  { key: "auto", label: "자동" },
+  { key: "clean_digital", label: "깨끗한 디지털" },
+  { key: "warm_film", label: "따뜻한 필름톤" },
+  { key: "cream_tone", label: "크림 무드톤" },
+  { key: "vintage_faded", label: "바랜 빈티지" },
+  { key: "magazine_crisp", label: "매거진 선명톤" },
+  { key: "iphone_real", label: "아이폰 리얼톤" },
+] as const;
 
-      if (!response.ok) {
-        throw new Error(data?.error || "생성에 실패했습니다.");
-      }
+const STYLE_OPTIONS = [
+  { key: "auto", label: "자동" },
+  { key: "ecommerce", label: "쇼핑몰 상세페이지" },
+  { key: "lookbook", label: "룩북" },
+  { key: "daily_mood", label: "감성 데일리룩" },
+  { key: "editorial", label: "프리미엄 매거진" },
+  { key: "ugc", label: "아이폰 UGC" },
+  { key: "guestlook", label: "하객룩 화보" },
+] as const;
 
-      setFinalPrompt(data.prompt || "");
-      setResultImage(data.imageUrl || null);
-    } catch (error: any) {
-      console.error("생성 에러:", error);
-      alert(error?.message || "생성 중 오류가 발생했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  };
+const GAZE_OPTIONS = [
+  { key: "auto", label: "자동 추천" },
+  { key: "front", label: "정면" },
+  { key: "slight_side", label: "살짝 옆" },
+  { key: "side", label: "완전 옆" },
+  { key: "down", label: "아래" },
+  { key: "far", label: "먼 곳" },
+  { key: "back_turn", label: "뒤돌아봄" },
+  { key: "not_camera", label: "카메라 안 봄" },
+  { key: "mirror", label: "거울 속 시선" },
+] as const;
 
-  return (
-    <div className="min-h-screen bg-[#f5f6f3] text-[#1d2420]">
-      <div className="mx-auto flex min-h-screen max-w-[1600px]">
-        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 border-r border-[#d9e2d2] bg-[#f1f3ee] px-8 py-12 xl:block">
-          <div className="mb-14">
-            <h1 className="text-[42px] font-extrabold tracking-tight text-[#178c7b]">
-              정호 AI Factory
-            </h1>
-            <p className="mt-3 text-sm text-[#748176]">
-              AI 콘텐츠 제작용 작업 도구
-            </p>
-          </div>
+const EXPRESSION_OPTIONS = [
+  { key: "auto", label: "자동 추천" },
+  { key: "chic", label: "무표정 시크" },
+  { key: "soft_smile", label: "은은한 미소" },
+  { key: "bright_smile", label: "밝은 미소" },
+  { key: "calm", label: "차분한 표정" },
+  { key: "dreamy", label: "몽환적인 표정" },
+  { key: "daily", label: "데일리 표정" },
+  { key: "focused", label: "집중한 듯한 표정" },
+] as const;
 
-          <nav className="space-y-3">
-            <MenuItem label="프롬프트 생성" active />
-            <MenuItem label="피팅컷 생성" />
-            <MenuItem label="포즈 체인지" />
-            <MenuItem label="제품 체인지" />
-            <MenuItem label="컬러 체인지" />
-            <MenuItem label="배경 체인지" />
-            <MenuItem label="디테일 생성" />
-            <MenuItem label="영상 생성" />
-          </nav>
-        </aside>
+const HAIR_OPTIONS = [
+  { key: "keep_uploaded", label: "업로드 헤어 유지" },
+  { key: "auto", label: "자동 추천" },
+  { key: "long_straight", label: "긴 생머리" },
+  { key: "c_curl", label: "자연스러운 C컬" },
+  { key: "wave", label: "웨이브" },
+  { key: "low_bun", label: "로우번" },
+  { key: "ponytail", label: "포니테일" },
+  { key: "half_up", label: "반묶음" },
+  { key: "neat_updo", label: "단정한 묶음머리" },
+  { key: "short_cut", label: "숏컷" },
+  { key: "behind_ear", label: "귀 뒤로 넘긴 스타일" },
+] as const;
 
-        <main className="flex-1 px-5 py-8 md:px-8 xl:px-12">
-          <header className="mb-10 rounded-[28px] border border-[#d7e3d1] bg-white px-6 py-7 shadow-[0_10px_30px_rgba(76,96,70,0.06)] md:px-10">
-            <div className="text-center">
-              <p className="mb-2 text-sm font-semibold tracking-[0.18em] text-[#7a8d7c]">
-                PROMPT BUILDER
-              </p>
-              <h2 className="text-3xl font-extrabold text-[#39443d] md:text-5xl">
-                프롬프트 생성
-              </h2>
-              <p className="mt-3 text-sm text-[#7a857d] md:text-base">
-                이미지 프롬프트를 한 번에 구성하고 생성 준비를 합니다.
-              </p>
-            </div>
-          </header>
+const SHOT_TYPE_OPTIONS: { key: ShotTypeOption; label: string }[] = [
+  { key: "full", label: "전신컷" },
+  { key: "upper", label: "상반신컷" },
+  { key: "lower", label: "하반신컷" },
+  { key: "selfie_upper", label: "상반 셀카" },
+  { key: "neck_crop", label: "목짤컷" },
+];
 
-          <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <UploadCard
-              title="배경이미지"
-              uploadTitle="배경이미지 업로드"
-              helper="배경을 변경할 이미지를 선택해주세요"
-              accent="green"
-              inputId="backgroundImage"
-              preview={backgroundImage}
-              onFileSelect={createPreview(setBackgroundImage)}
-            />
-            <UploadCard
-              title="모델이미지"
-              uploadTitle="모델이미지 업로드"
-              helper="모델을 변경할 이미지를 선택해주세요"
-              accent="teal"
-              inputId="modelImage"
-              preview={modelImage}
-              onFileSelect={createPreview(setModelImage)}
-            />
-          </section>
+const DISTANCE_OPTIONS: { key: CameraDistanceOption; label: string }[] = [
+  { key: "close", label: "가까움" },
+  { key: "normal", label: "보통" },
+  { key: "far", label: "멀게" },
+  { key: "very_far", label: "아주 멀게" },
+];
 
-          <section className="mt-4 grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <PromptBox
-              title="배경 설명"
-              placeholder="원하는 배경 분위기, 장소, 조명, 색감 등을 자세히 입력해주세요."
-              value={backgroundPrompt}
-              onChange={setBackgroundPrompt}
-            />
-            <PromptBox
-              title="모델 설명"
-              placeholder="원하는 모델 분위기, 표정, 헤어, 체형, 스타일 톤 등을 입력해주세요."
-              value={modelPrompt}
-              onChange={setModelPrompt}
-            />
-          </section>
+const POSE_CATEGORY_OPTIONS: { key: PoseCategoryOption; label: string }[] = [
+  { key: "recommended", label: "추천컷" },
+  { key: "general", label: "일반컷" },
+  { key: "general_sitting", label: "일반앉은컷" },
+  { key: "general_chair", label: "일반의자컷" },
+  { key: "selfie", label: "셀카컷" },
+  { key: "selfie_sitting", label: "셀카앉은컷" },
+  { key: "selfie_chair", label: "셀카의자컷" },
+  { key: "wall_lean", label: "벽기댐컷" },
+  { key: "floor_sitting", label: "바닥앉은컷" },
+  { key: "bed", label: "침대컷" },
+  { key: "back_view", label: "뒤돌아보는컷" },
+  { key: "walking", label: "워킹컷" },
+  { key: "bag_focus", label: "가방/소품 강조컷" },
+];
 
-          <section className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <UploadCard
-              title="착용의류1"
-              uploadTitle="의류1이미지 업로드"
-              helper="착용할 의류 이미지를 선택해주세요"
-              accent="green"
-              inputId="cloth1Image"
-              preview={cloth1Image}
-              onFileSelect={createPreview(setCloth1Image)}
-            />
-            <UploadCard
-              title="착용의류2"
-              uploadTitle="의류2이미지 업로드"
-              helper="착용할 의류 이미지를 선택해주세요"
-              accent="teal"
-              inputId="cloth2Image"
-              preview={cloth2Image}
-              onFileSelect={createPreview(setCloth2Image)}
-            />
-          </section>
+const POSE_COUNT_OPTIONS = [1, 3, 5, 10, 20];
 
-          <section className="mt-4 grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <PromptBox
-              title="착용의류1 설명"
-              placeholder="원하는 의류의 소재, 핏감, 디테일 포인트를 입력해주세요."
-              value={cloth1Prompt}
-              onChange={setCloth1Prompt}
-            />
-            <PromptBox
-              title="착용의류2 설명"
-              placeholder="원하는 의류의 소재, 핏감, 디테일 포인트를 입력해주세요."
-              value={cloth2Prompt}
-              onChange={setCloth2Prompt}
-            />
-          </section>
-
-          <section className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <UploadCard
-              title="착용소품1"
-              uploadTitle="소품1이미지 업로드"
-              helper="소품 이미지를 선택해주세요"
-              accent="green"
-              inputId="accessory1Image"
-              preview={accessory1Image}
-              onFileSelect={createPreview(setAccessory1Image)}
-            />
-            <UploadCard
-              title="착용소품2"
-              uploadTitle="소품2이미지 업로드"
-              helper="소품 이미지를 선택해주세요"
-              accent="teal"
-              inputId="accessory2Image"
-              preview={accessory2Image}
-              onFileSelect={createPreview(setAccessory2Image)}
-            />
-          </section>
-
-          <section className="mt-4 grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <PromptBox
-              title="착용소품1 설명"
-              placeholder="원하는 소품의 소재, 크기, 컬러, 분위기를 입력해주세요."
-              value={accessory1Prompt}
-              onChange={setAccessory1Prompt}
-            />
-            <PromptBox
-              title="착용소품2 설명"
-              placeholder="원하는 소품의 소재, 크기, 컬러, 분위기를 입력해주세요."
-              value={accessory2Prompt}
-              onChange={setAccessory2Prompt}
-            />
-          </section>
-<section className="mt-8 space-y-5">
-  {/* 조명 설명 */}
-  <div className="rounded-[24px] border-2 border-[#7aa74f] bg-white p-5 shadow-[0_8px_24px_rgba(76,96,70,0.05)]">
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h4 className="text-xl font-extrabold text-[#187d72]">조명 설명</h4>
-        <p className="mt-1 text-sm text-[#7f8b81]">
-          원하는 옵션을 선택하거나 직접 입력해주세요.
-        </p>
-      </div>
-
-      <select
-        value={lighting}
-        onChange={(e) => setLighting(e.target.value)}
-        className="rounded-2xl bg-[#27b0a4] px-5 py-3 text-sm font-bold text-white outline-none"
-      >
-        <option value="soft-daylight" className="text-black">
-          부드러운 자연광
-        </option>
-        <option value="studio-clean" className="text-black">
-          클린 스튜디오광
-        </option>
-        <option value="warm-hotel" className="text-black">
-          따뜻한 호텔 조명
-        </option>
-        <option value="moody-editorial" className="text-black">
-          무디 에디토리얼
-        </option>
-      </select>
-    </div>
-
-    <textarea
-      value={lightingPrompt}
-      onChange={(e) => setLightingPrompt(e.target.value)}
-      placeholder="원하는 조명을 선택하거나, 구체적인 조명 연출을 입력해주세요."
-      className="mt-4 min-h-[90px] w-full rounded-2xl border-2 border-[#d8e5cd] bg-[#fcfdf9] px-4 py-3 text-sm outline-none placeholder:text-[#9aa59d] focus:border-[#96be59]"
-    />
-
-    <div className="mt-3 flex justify-end">
-      <button
-        type="button"
-        onClick={() => setIgnoreLightingPreset(!ignoreLightingPreset)}
-        className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-          ignoreLightingPreset
-            ? "bg-[#27b0a4] text-white"
-            : "bg-[#e8efe6] text-[#4f5b53]"
-        }`}
-      >
-        {ignoreLightingPreset
-          ? "입력값 있으면 preset 무시: ON"
-          : "입력값 있으면 preset 무시: OFF"}
-      </button>
-    </div>
-  </div>
-
-  {/* 필름설명 */}
-  <div className="rounded-[24px] border-2 border-[#7aa74f] bg-white p-5 shadow-[0_8px_24px_rgba(76,96,70,0.05)]">
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h4 className="text-xl font-extrabold text-[#187d72]">필름설명</h4>
-        <p className="mt-1 text-sm text-[#7f8b81]">
-          원하는 옵션을 선택하거나 직접 입력해주세요.
-        </p>
-      </div>
-
-      <select
-        value={film}
-        onChange={(e) => setFilm(e.target.value)}
-        className="rounded-2xl bg-[#27b0a4] px-5 py-3 text-sm font-bold text-white outline-none"
-      >
-        <option value="clean-editorial" className="text-black">
-          클린 에디토리얼
-        </option>
-        <option value="soft-film" className="text-black">
-          소프트 필름톤
-        </option>
-        <option value="luxury-fashion" className="text-black">
-          럭셔리 패션 무드
-        </option>
-        <option value="iphone-real" className="text-black">
-          아이폰 리얼 촬영감
-        </option>
-      </select>
-    </div>
-
-    <textarea
-      value={filmPrompt}
-      onChange={(e) => setFilmPrompt(e.target.value)}
-      placeholder="원하는 필름톤이나 색감 스타일을 입력해주세요."
-      className="mt-4 min-h-[90px] w-full rounded-2xl border-2 border-[#d8e5cd] bg-[#fcfdf9] px-4 py-3 text-sm outline-none placeholder:text-[#9aa59d] focus:border-[#96be59]"
-    />
-
-    <div className="mt-3 flex justify-end">
-      <button
-        type="button"
-        onClick={() => setIgnoreFilmPreset(!ignoreFilmPreset)}
-        className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-          ignoreFilmPreset
-            ? "bg-[#27b0a4] text-white"
-            : "bg-[#e8efe6] text-[#4f5b53]"
-        }`}
-      >
-        {ignoreFilmPreset
-          ? "입력값 있으면 preset 무시: ON"
-          : "입력값 있으면 preset 무시: OFF"}
-      </button>
-    </div>
-  </div>
-
-  {/* 포즈설명 */}
-  <div className="rounded-[24px] border-2 border-[#7aa74f] bg-white p-5 shadow-[0_8px_24px_rgba(76,96,70,0.05)]">
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h4 className="text-xl font-extrabold text-[#187d72]">포즈설명</h4>
-        <p className="mt-1 text-sm text-[#7f8b81]">
-          원하는 옵션을 선택하거나 직접 입력해주세요.
-        </p>
-      </div>
-
-      <select
-        value={pose}
-        onChange={(e) => setPose(e.target.value)}
-        className="rounded-2xl bg-[#27b0a4] px-5 py-3 text-sm font-bold text-white outline-none"
-      >
-        <option value="natural-standing" className="text-black">
-          자연스러운 정면 포즈
-        </option>
-        <option value="one-hand-bag" className="text-black">
-          한 손 가방 포즈
-        </option>
-        <option value="mirror-selfie" className="text-black">
-          거울 셀카 포즈
-        </option>
-        <option value="lookbook-angle" className="text-black">
-          룩북 스타일 포즈
-        </option>
-      </select>
-    </div>
-
-    <textarea
-      value={posePrompt}
-      onChange={(e) => setPosePrompt(e.target.value)}
-      placeholder="원하는 포즈나 손동작, 시선 방향을 입력해주세요."
-      className="mt-4 min-h-[90px] w-full rounded-2xl border-2 border-[#d8e5cd] bg-[#fcfdf9] px-4 py-3 text-sm outline-none placeholder:text-[#9aa59d] focus:border-[#96be59]"
-    />
-
-    <div className="mt-3 flex justify-end">
-      <button
-        type="button"
-        onClick={() => setIgnorePosePreset(!ignorePosePreset)}
-        className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-          ignorePosePreset
-            ? "bg-[#27b0a4] text-white"
-            : "bg-[#e8efe6] text-[#4f5b53]"
-        }`}
-      >
-        {ignorePosePreset
-          ? "입력값 있으면 preset 무시: ON"
-          : "입력값 있으면 preset 무시: OFF"}
-      </button>
-    </div>
-  </div>
-</section>
-          <section className="mt-8 space-y-5">
-            <div className="rounded-[24px] border-2 border-[#7aa74f] bg-white p-5 shadow-[0_8px_24px_rgba(76,96,70,0.05)]">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h4 className="text-xl font-extrabold text-[#187d72]">
-                    프롬프트 스타일
-                  </h4>
-                  <p className="mt-1 text-sm text-[#7f8b81]">
-                    원하는 결과물 톤에 맞춰 프롬프트 스타일을 선택해주세요.
-                  </p>
-                </div>
-
-                <select
-                  value={promptStyle}
-                  onChange={(e) =>
-                    setPromptStyle(
-                      e.target.value as
-                        | "lookbook"
-                        | "detailpage"
-                        | "instagram"
-                        | "iphone-ugc"
-                    )
-                  }
-                  className="rounded-2xl bg-[#27b0a4] px-5 py-3 text-sm font-bold text-white outline-none"
-                >
-                  <option value="lookbook" className="text-black">
-                    룩북
-                  </option>
-                  <option value="detailpage" className="text-black">
-                    상세페이지
-                  </option>
-                  <option value="instagram" className="text-black">
-                    인스타 감성
-                  </option>
-                  <option value="iphone-ugc" className="text-black">
-                    아이폰 UGC
-                  </option>
-                </select>
-              </div>
-
-              <textarea
-                value={promptStyleDetail}
-                onChange={(e) => setPromptStyleDetail(e.target.value)}
-                placeholder="스타일을 더 구체적으로 입력해주세요. 예: 감성적인 룩북 톤, 미니멀한 브랜드 캠페인 무드"
-                className="mt-4 min-h-[90px] w-full rounded-2xl border-2 border-[#d8e5cd] bg-[#fcfdf9] px-4 py-3 text-sm outline-none placeholder:text-[#9aa59d] focus:border-[#96be59]"
-              />
-
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIgnoreStylePreset(!ignoreStylePreset)}
-                  className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-                    ignoreStylePreset
-                      ? "bg-[#27b0a4] text-white"
-                      : "bg-[#e8efe6] text-[#4f5b53]"
-                  }`}
-                >
-                  {ignoreStylePreset
-                    ? "입력값 있으면 preset 무시: ON"
-                    : "입력값 있으면 preset 무시: OFF"}
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border-2 border-[#7aa74f] bg-white p-5 shadow-[0_8px_24px_rgba(76,96,70,0.05)]">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h4 className="text-xl font-extrabold text-[#187d72]">
-                    프롬프트 강도
-                  </h4>
-                  <p className="mt-1 text-sm text-[#7f8b81]">
-                    자연스러운 표현, 디테일 강조, 상업용 강조 중에서
-                    선택해주세요.
-                  </p>
-                </div>
-
-                <select
-                  value={promptStrength}
-                  onChange={(e) =>
-                    setPromptStrength(
-                      e.target.value as "natural" | "detailed" | "commercial"
-                    )
-                  }
-                  className="rounded-2xl bg-[#27b0a4] px-5 py-3 text-sm font-bold text-white outline-none"
-                >
-                  <option value="natural" className="text-black">
-                    자연스러움
-                  </option>
-                  <option value="detailed" className="text-black">
-                    디테일 강조
-                  </option>
-                  <option value="commercial" className="text-black">
-                    상업용 강조
-                  </option>
-                </select>
-              </div>
-
-              <textarea
-                value={promptStrengthDetail}
-                onChange={(e) => setPromptStrengthDetail(e.target.value)}
-                placeholder="강도를 더 구체적으로 입력해주세요. 예: 원단 디테일을 강하게, 광고용으로 더 세련되게"
-                className="mt-4 min-h-[90px] w-full rounded-2xl border-2 border-[#d8e5cd] bg-[#fcfdf9] px-4 py-3 text-sm outline-none placeholder:text-[#9aa59d] focus:border-[#96be59]"
-              />
-
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setIgnoreStrengthPreset(!ignoreStrengthPreset)
-                  }
-                  className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-                    ignoreStrengthPreset
-                      ? "bg-[#27b0a4] text-white"
-                      : "bg-[#e8efe6] text-[#4f5b53]"
-                  }`}
-                >
-                  {ignoreStrengthPreset
-                    ? "입력값 있으면 preset 무시: ON"
-                    : "입력값 있으면 preset 무시: OFF"}
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border-2 border-[#7aa74f] bg-white p-5 shadow-[0_8px_24px_rgba(76,96,70,0.05)]">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h4 className="text-xl font-extrabold text-[#187d72]">
-                    OUTFIT LOCK
-                  </h4>
-                  <p className="mt-1 text-sm text-[#7f8b81]">
-                    의상 핏감, 소재감, 디테일 포인트를 더 강하게 유지합니다.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setUseOutfitLock(!useOutfitLock)}
-                  className={`rounded-2xl px-5 py-3 text-sm font-bold transition ${
-                    useOutfitLock
-                      ? "bg-[#27b0a4] text-white"
-                      : "bg-[#e8efe6] text-[#4f5b53]"
-                  }`}
-                >
-                  {useOutfitLock ? "ON" : "OFF"}
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <div className="mt-8 flex items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => setGenerateMode("prompt")}
-              className={`rounded-2xl px-6 py-3 text-sm font-bold transition ${
-                generateMode === "prompt"
-                  ? "bg-[#27b0a4] text-white shadow-[0_10px_20px_rgba(39,176,164,0.18)]"
-                  : "bg-[#e8efe6] text-[#4f5b53]"
-              }`}
-            >
-              프롬프트만 생성
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setGenerateMode("image")}
-              className={`rounded-2xl px-6 py-3 text-sm font-bold transition ${
-                generateMode === "image"
-                  ? "bg-[#1877c8] text-white shadow-[0_10px_20px_rgba(24,119,200,0.18)]"
-                  : "bg-[#e8efe6] text-[#4f5b53]"
-              }`}
-            >
-              프롬프트 + 이미지 생성
-            </button>
-          </div>
-
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <button
-              onClick={resetAll}
-              className="rounded-2xl bg-[#d7d7d7] px-8 py-4 text-base font-bold text-white transition hover:brightness-95"
-            >
-              초기화
-            </button>
-
-            <button
-              onClick={handleGenerate}
-              className="rounded-2xl bg-[#1877c8] px-12 py-4 text-base font-extrabold text-white shadow-[0_12px_25px_rgba(24,119,200,0.22)] transition hover:brightness-110"
-            >
-              {loading
-                ? "생성 중..."
-                : generateMode === "prompt"
-                ? "프롬프트 생성 시작"
-                : "프롬프트 + 이미지 생성 시작"}
-            </button>
-          </div>
-
-          <div className="mt-12">
-            <div className="rounded-[24px] border border-[#b6d57b]/30 bg-white/80 p-6 shadow-[0_10px_30px_rgba(76,96,70,0.05)] backdrop-blur-sm">
-              <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-extrabold text-[#187d72]">
-                  생성 결과
-                </h3>
-                <span className="text-sm text-[#7f8b81]">AI 결과 이미지</span>
-              </div>
-
-              <div className="mt-6 grid min-h-[420px] grid-cols-1 gap-6 xl:grid-cols-2">
-                <div className="flex min-h-[420px] flex-col rounded-[20px] border-2 border-dashed border-[#d8e5cd] bg-[#f9fbf7] p-5">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h4 className="text-lg font-extrabold text-[#187d72]">
-                      전체 생성 프롬프트
-                    </h4>
-
-                    {finalPrompt ? (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(finalPrompt);
-                            setCopied(true);
-                            setTimeout(() => {
-                              setCopied(false);
-                            }, 1500);
-                          } catch (error) {
-                            alert("복사에 실패했습니다.");
-                          }
-                        }}
-                        className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
-                          copied
-                            ? "bg-[#27b0a4] text-white"
-                            : "bg-[#eaf4ff] text-[#1877c8]"
-                        }`}
-                      >
-                        {copied ? "복사 완료!" : "복사"}
-                      </button>
-                    ) : null}
-                  </div>
-
-                  <div className="flex-1 overflow-auto rounded-2xl border border-[#d8e5cd] bg-white p-4 text-sm leading-7 text-[#445047]">
-                    {finalPrompt ? (
-                      <pre className="whitespace-pre-wrap break-words font-sans">
-                        {finalPrompt}
-                      </pre>
-                    ) : (
-                      <span className="text-[#9aa59d]">
-                        아직 생성된 프롬프트가 없습니다
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex min-h-[420px] items-center justify-center rounded-[20px] border-2 border-dashed border-[#d8e5cd] bg-[#f9fbf7] p-4">
-                  {loading ? (
-                    <span className="text-[#9aa59d]">생성 중...</span>
-                  ) : resultImage ? (
-                    <img
-                      src={resultImage}
-                      alt="생성 결과"
-                      className="max-h-[420px] rounded-xl shadow-md"
-                    />
-                  ) : (
-                    <span className="text-[#9aa59d]">
-                      {generateMode === "prompt"
-                        ? "프롬프트만 생성 모드입니다"
-                        : "아직 생성된 이미지가 없습니다"}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
+function makePreviewItems(files: File[]) {
+  return files.map((file, index) => ({
+    id: `${file.name}-${file.lastModified}-${index}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`,
+    file,
+    url: URL.createObjectURL(file),
+  }));
 }
 
-function MenuItem({
-  label,
-  active = false,
+function usePreviewState(initial: File[] = []) {
+  const [items, setItems] = useState<PreviewItem[]>(() =>
+    makePreviewItems(initial)
+  );
+
+  useEffect(() => {
+    return () => {
+      items.forEach((item) => URL.revokeObjectURL(item.url));
+    };
+  }, [items]);
+
+  const appendFiles = (files: File[]) => {
+    if (!files.length) return;
+    setItems((prev) => [...prev, ...makePreviewItems(files)]);
+  };
+
+  const removeItem = (id: string) => {
+    setItems((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target) URL.revokeObjectURL(target.url);
+      return prev.filter((item) => item.id !== id);
+    });
+  };
+
+  const clear = () => {
+    setItems((prev) => {
+      prev.forEach((item) => URL.revokeObjectURL(item.url));
+      return [];
+    });
+  };
+
+  return {
+    items,
+    files: items.map((item) => item.file),
+    appendFiles,
+    removeItem,
+    clear,
+  };
+}
+
+function SelectBox({
+  title,
+  value,
+  onChange,
+  options,
 }: {
-  label: string;
-  active?: boolean;
+  title: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly SimpleOption[];
 }) {
   return (
-    <div
-      className={`w-full rounded-2xl px-5 py-4 text-[24px] font-bold leading-none whitespace-nowrap transition ${
-        active
-          ? "border border-[#b6d57b]/30 bg-[#f8fff0] text-[#7fb53e] shadow-[0_8px_18px_rgba(162,197,86,0.18)]"
-          : "text-[#1c1f1d] hover:bg-white"
-      }`}
-    >
-      {label}
+    <div style={panelStyle}>
+      <div style={labelStyle}>{title}</div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={selectStyle}
+      >
+        {options.map((opt) => (
+          <option key={opt.key} value={opt.key}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
 
 function UploadCard({
   title,
-  uploadTitle,
-  helper,
-  accent = "green",
-  inputId,
-  preview,
-  onFileSelect,
-}: UploadCardProps) {
-  const [isDragging, setIsDragging] = useState(false);
+  description,
+  note,
+  setNote,
+  items,
+  onAddFiles,
+  onRemoveItem,
+}: {
+  title: string;
+  description: string;
+  note: string;
+  setNote: (value: string) => void;
+  items: PreviewItem[];
+  onAddFiles: (files: File[]) => void;
+  onRemoveItem: (id: string) => void;
+}) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [dragging, setDragging] = useState(false);
 
-  const accentStyle =
-    accent === "green"
-      ? {
-          border: "border-[#7aa74f]",
-          softBorder: "border-[#b8d38d]",
-          title: "text-[#187d72]",
-          button: "bg-[#27b0a4]",
-        }
-      : {
-          border: "border-[#6e9c56]",
-          softBorder: "border-[#b8d38d]",
-          title: "text-[#187d72]",
-          button: "bg-[#27b0a4]",
-        };
-
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    onFileSelect(file);
-  };
-
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    onFileSelect(file);
+  const handleFiles = (fileList: FileList | null) => {
+    const files = Array.from(fileList || []).filter((file) =>
+      file.type.startsWith("image/")
+    );
+    if (files.length) onAddFiles(files);
   };
 
   return (
-    <div
-      className={`rounded-[28px] border-2 ${accentStyle.border} bg-white p-5 shadow-[0_10px_30px_rgba(76,96,70,0.05)]`}
-    >
-      <h3 className={`mb-4 text-2xl font-extrabold ${accentStyle.title}`}>
-        {title}
-      </h3>
+    <div style={uploadCardStyle}>
+      <div style={labelRow}>
+        <div>
+          <div style={uploadTitle}>{title}</div>
+          <div style={uploadDesc}>{description}</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          style={smallButton}
+        >
+          이미지 추가
+        </button>
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => {
+          handleFiles(e.target.files);
+          e.currentTarget.value = "";
+        }}
+      />
 
       <div
-        className={`rounded-[26px] border-2 ${accentStyle.softBorder} bg-[#fbfcf8] p-6`}
+        style={{
+          ...dropZoneStyle,
+          ...(dragging ? dropZoneActiveStyle : {}),
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          if (e.currentTarget === e.target) setDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          handleFiles(e.dataTransfer.files);
+        }}
+        onClick={() => inputRef.current?.click()}
       >
-        <input
-          ref={inputRef}
-          id={inputId}
-          type="file"
-          accept="image/*"
-          onChange={handleInputChange}
-          className="hidden"
-        />
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>
+          드래그 앤 드롭 또는 클릭해서 업로드
+        </div>
+        <div style={{ fontSize: 13, opacity: 0.72 }}>
+          여러 장 업로드 가능 · 현재 {items.length}장
+        </div>
+      </div>
 
-        <div
-          onClick={() => inputRef.current?.click()}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={`cursor-pointer rounded-[28px] border px-6 py-10 text-center transition ${
-            isDragging
-              ? "border-[#27b0a4] bg-[#f2fffd] shadow-[0_16px_40px_rgba(39,176,164,0.18)]"
-              : "border-[#b6d57b]/40 bg-white hover:shadow-[0_16px_40px_rgba(39,176,164,0.15)]"
-          }`}
-        >
-          {preview ? (
-            <div>
-              <img
-                src={preview}
-                alt={title}
-                className="mx-auto max-h-[320px] rounded-2xl object-contain"
-              />
-              <p className="mt-5 text-sm font-semibold text-[#75836f]">
-                드래그 앤 드롭 또는 클릭해서 다른 이미지로 변경
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="mb-3 text-5xl text-[#157f74]">↑</div>
-              <div className="text-[32px] font-extrabold text-[#1d2420]">
-                {uploadTitle}
-              </div>
-              <p className="mt-4 text-base text-[#616c64]">{helper}</p>
-              <p className="mt-3 text-sm font-bold text-[#90ae62]">
-                드래그 앤 드롭 또는 클릭하여 파일 선택
-              </p>
-
-              <div
-                className={`mx-auto mt-7 w-fit rounded-2xl ${accentStyle.button} px-8 py-3 text-lg font-bold text-white shadow-[0_10px_20px_rgba(39,176,164,0.18)]`}
+      {items.length > 0 && (
+        <div style={previewGridStyle}>
+          {items.map((item) => (
+            <div key={item.id} style={previewBoxStyle}>
+              <img src={item.url} alt={item.file.name} style={previewImageStyle} />
+              <button
+                type="button"
+                onClick={() => onRemoveItem(item.id)}
+                style={removeButtonStyle}
+                aria-label="remove image"
               >
-                파일 선택
-              </div>
-            </>
+                ×
+              </button>
+              <div style={previewNameStyle}>{item.file.name}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginTop: 12 }}>
+        <div style={{ ...labelStyle, marginBottom: 8 }}>설명</div>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="예: 햇살 들어오는 크림톤 방 / 20대 한국인 여성 / 원단감 살려서 / 상의만 참고 / 소품은 포인트만"
+          style={textareaStyle}
+        />
+      </div>
+    </div>
+  );
+}
+
+export default function Page() {
+  const backgroundState = usePreviewState();
+  const modelState = usePreviewState();
+  const clothing1State = usePreviewState();
+  const clothing2State = usePreviewState();
+  const accessory1State = usePreviewState();
+  const accessory2State = usePreviewState();
+
+  const [backgroundNote, setBackgroundNote] = useState("");
+  const [modelNote, setModelNote] = useState("");
+  const [clothing1Note, setClothing1Note] = useState("");
+  const [clothing2Note, setClothing2Note] = useState("");
+  const [accessory1Note, setAccessory1Note] = useState("");
+  const [accessory2Note, setAccessory2Note] = useState("");
+  const [extraInstructions, setExtraInstructions] = useState("");
+
+  const [ratio, setRatio] = useState("4:5");
+  const [imageModel, setImageModel] = useState("gemini-3.1-flash-image-preview");
+  const [imageSize, setImageSize] = useState("1K");
+  const [generateMode, setGenerateMode] = useState("prompt_only");
+
+  const [lighting, setLighting] = useState("sunlit_natural");
+  const [filmTone, setFilmTone] = useState("magazine_crisp");
+  const [style, setStyle] = useState("ecommerce");
+
+  const [shotType, setShotType] = useState<ShotTypeOption>("full");
+  const [cameraDistance, setCameraDistance] =
+    useState<CameraDistanceOption>("far");
+  const [poseCategories, setPoseCategories] = useState<PoseCategoryOption[]>([
+    "recommended",
+    "general",
+  ]);
+  const [poseCount, setPoseCount] = useState(1);
+
+  const [gazeOption, setGazeOption] = useState("auto");
+  const [expressionOption, setExpressionOption] = useState("auto");
+  const [hairstyle, setHairstyle] = useState("keep_uploaded");
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [referenceMapText, setReferenceMapText] = useState("");
+  const [analysisSummary, setAnalysisSummary] = useState<{
+    clothingSummary?: string;
+    recommendedBottom?: string;
+    hairSummary?: string;
+    overallMood?: string;
+  } | null>(null);
+  const [prompts, setPrompts] = useState<PromptCard[]>([]);
+  const [lightboxImage, setLightboxImage] = useState<{
+    src: string;
+    title: string;
+  } | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
+
+  const allPromptsText = useMemo(() => buildAllPromptsText(prompts), [prompts]);
+
+  const imageSizeDisabled = !canUseImageSize(
+    imageModel as
+      | "gemini-2.5-flash-image"
+      | "gemini-3.1-flash-image-preview"
+      | "gemini-3-pro-image-preview"
+  );
+
+  async function handleGenerate() {
+    setLoading(true);
+    setError("");
+    setReferenceMapText("");
+    setAnalysisSummary(null);
+    setPrompts([]);
+
+    try {
+      const totalImageCount =
+        backgroundState.files.length +
+        modelState.files.length +
+        clothing1State.files.length +
+        clothing2State.files.length +
+        accessory1State.files.length +
+        accessory2State.files.length;
+
+      if (totalImageCount === 0) {
+        throw new Error("최소 1장 이상의 참고 이미지를 업로드해주세요.");
+      }
+
+      if (poseCategories.length === 0) {
+        throw new Error("포즈를 최소 1개 이상 선택해주세요.");
+      }
+
+      const formData = new FormData();
+
+      backgroundState.files.forEach((file) =>
+        formData.append("backgroundImages", file)
+      );
+      modelState.files.forEach((file) => formData.append("modelImages", file));
+      clothing1State.files.forEach((file) =>
+        formData.append("clothing1Images", file)
+      );
+      clothing2State.files.forEach((file) =>
+        formData.append("clothing2Images", file)
+      );
+      accessory1State.files.forEach((file) =>
+        formData.append("accessory1Images", file)
+      );
+      accessory2State.files.forEach((file) =>
+        formData.append("accessory2Images", file)
+      );
+
+      formData.append("backgroundNote", backgroundNote);
+      formData.append("modelNote", modelNote);
+      formData.append("clothing1Note", clothing1Note);
+      formData.append("clothing2Note", clothing2Note);
+      formData.append("accessory1Note", accessory1Note);
+      formData.append("accessory2Note", accessory2Note);
+      formData.append("extraInstructions", extraInstructions);
+
+      formData.append("ratio", ratio);
+      formData.append("imageModel", imageModel);
+      formData.append("imageSize", imageSizeDisabled ? "auto" : imageSize);
+      formData.append("generateMode", generateMode);
+
+      formData.append("lighting", lighting);
+      formData.append("filmTone", filmTone);
+      formData.append("style", style);
+
+      formData.append("shotType", shotType);
+      formData.append("cameraDistance", cameraDistance);
+      formData.append("poseCategories", JSON.stringify(poseCategories));
+      formData.append("poseCount", String(poseCount));
+
+      formData.append("gazeOption", gazeOption);
+      formData.append("expressionOption", expressionOption);
+      formData.append("hairstyle", hairstyle);
+
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = (await res.json()) as ApiResponse;
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "생성 중 오류가 발생했습니다.");
+      }
+
+      setReferenceMapText(data.referenceMapText || "");
+      setAnalysisSummary(data.analysis || null);
+      setPrompts(data.prompts || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("복사됐습니다.");
+    } catch {
+      alert("복사에 실패했습니다.");
+    }
+  }
+
+  function downloadImage(dataUrl: string, fileName: string) {
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  async function downloadAllImages() {
+    try {
+      setDownloadingAll(true);
+
+      const imageItems = prompts.filter((item) => item.imageDataUrl);
+
+      if (!imageItems.length) {
+        alert("다운로드할 이미지가 없습니다.");
+        return;
+      }
+
+      imageItems.forEach((item, index) => {
+        const safeTitle = item.title.replace(/[^\w\-가-힣]+/g, "_");
+        downloadImage(
+          item.imageDataUrl as string,
+          `${index + 1}_${safeTitle}.png`
+        );
+      });
+    } finally {
+      setDownloadingAll(false);
+    }
+  }
+
+  function clearAll() {
+    backgroundState.clear();
+    modelState.clear();
+    clothing1State.clear();
+    clothing2State.clear();
+    accessory1State.clear();
+    accessory2State.clear();
+
+    setBackgroundNote("");
+    setModelNote("");
+    setClothing1Note("");
+    setClothing2Note("");
+    setAccessory1Note("");
+    setAccessory2Note("");
+    setExtraInstructions("");
+
+    setReferenceMapText("");
+    setAnalysisSummary(null);
+    setPrompts([]);
+    setError("");
+  }
+
+  function togglePoseCategory(key: PoseCategoryOption) {
+    setPoseCategories((prev) =>
+      prev.includes(key) ? prev.filter((v) => v !== key) : [...prev, key]
+    );
+  }
+
+  return (
+    <main style={pageStyle}>
+      <div style={containerStyle}>
+        <h1 style={{ fontSize: 32, fontWeight: 900, marginBottom: 8 }}>
+          FitBuilder
+        </h1>
+        <p style={{ opacity: 0.75, marginBottom: 24 }}>
+          참조 이미지 번호 기반 프롬프트 생성 + Gemini 이미지 생성
+        </p>
+
+        <div style={sectionTitleStyle}>참고 이미지 업로드</div>
+        <div style={uploadGridStyle}>
+          <UploadCard
+            title="배경 이미지"
+            description="배경, 공간, 인테리어"
+            note={backgroundNote}
+            setNote={setBackgroundNote}
+            items={backgroundState.items}
+            onAddFiles={backgroundState.appendFiles}
+            onRemoveItem={backgroundState.removeItem}
+          />
+          <UploadCard
+            title="모델 이미지"
+            description="얼굴, 체형, 헤어 참고"
+            note={modelNote}
+            setNote={setModelNote}
+            items={modelState.items}
+            onAddFiles={modelState.appendFiles}
+            onRemoveItem={modelState.removeItem}
+          />
+          <UploadCard
+            title="의류 1"
+            description="주요 의상 참고"
+            note={clothing1Note}
+            setNote={setClothing1Note}
+            items={clothing1State.items}
+            onAddFiles={clothing1State.appendFiles}
+            onRemoveItem={clothing1State.removeItem}
+          />
+          <UploadCard
+            title="의류 2"
+            description="보조 의상 또는 하의 참고"
+            note={clothing2Note}
+            setNote={setClothing2Note}
+            items={clothing2State.items}
+            onAddFiles={clothing2State.appendFiles}
+            onRemoveItem={clothing2State.removeItem}
+          />
+          <UploadCard
+            title="소품 1"
+            description="가방, 신발, 악세서리"
+            note={accessory1Note}
+            setNote={setAccessory1Note}
+            items={accessory1State.items}
+            onAddFiles={accessory1State.appendFiles}
+            onRemoveItem={accessory1State.removeItem}
+          />
+          <UploadCard
+            title="소품 2"
+            description="추가 소품 참고"
+            note={accessory2Note}
+            setNote={setAccessory2Note}
+            items={accessory2State.items}
+            onAddFiles={accessory2State.appendFiles}
+            onRemoveItem={accessory2State.removeItem}
+          />
+        </div>
+
+        <div style={sectionTitleStyle}>출력 설정</div>
+        <div style={grid4Style}>
+          <div style={panelStyle}>
+            <div style={labelStyle}>비율</div>
+            <select
+              value={ratio}
+              onChange={(e) => setRatio(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="1:1">1:1</option>
+              <option value="4:5">4:5</option>
+              <option value="16:9">16:9</option>
+              <option value="9:16">9:16</option>
+            </select>
+          </div>
+
+          <div style={panelStyle}>
+            <div style={labelStyle}>생성 모델</div>
+            <select
+              value={imageModel}
+              onChange={(e) => setImageModel(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="gemini-2.5-flash-image">
+                Gemini 2.5 Flash Image
+              </option>
+              <option value="gemini-3.1-flash-image-preview">
+                Gemini 3.1 Flash Image
+              </option>
+              <option value="gemini-3-pro-image-preview">
+                Gemini 3 Pro Image
+              </option>
+            </select>
+          </div>
+
+          <div style={panelStyle}>
+            <div style={labelStyle}>해상도</div>
+            <select
+              value={imageSizeDisabled ? "auto" : imageSize}
+              onChange={(e) => setImageSize(e.target.value)}
+              disabled={imageSizeDisabled}
+              style={{
+                ...selectStyle,
+                opacity: imageSizeDisabled ? 0.55 : 1,
+              }}
+            >
+              <option value="auto">기본</option>
+              <option value="1K">1K</option>
+              <option value="2K">2K</option>
+              <option value="4K">4K</option>
+            </select>
+            {imageSizeDisabled && (
+              <div style={hintTextStyle}>2.5 Flash Image는 비율만 사용</div>
+            )}
+          </div>
+
+          <div style={panelStyle}>
+            <div style={labelStyle}>생성 방식</div>
+            <select
+              value={generateMode}
+              onChange={(e) => setGenerateMode(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="prompt_only">프롬프트만 생성</option>
+              <option value="prompt_and_image">
+                프롬프트 + Gemini 이미지 생성
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div style={grid3Style}>
+          <SelectBox
+            title="조명"
+            value={lighting}
+            onChange={setLighting}
+            options={LIGHTING_OPTIONS}
+          />
+          <SelectBox
+            title="필름 / 톤"
+            value={filmTone}
+            onChange={setFilmTone}
+            options={FILM_OPTIONS}
+          />
+          <SelectBox
+            title="스타일"
+            value={style}
+            onChange={setStyle}
+            options={STYLE_OPTIONS}
+          />
+        </div>
+
+        <div style={panelStyle}>
+          <div style={labelStyle}>컷 타입</div>
+          <div style={pillRowStyle}>
+            {SHOT_TYPE_OPTIONS.map((opt) => {
+              const active = shotType === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setShotType(opt.key)}
+                  style={active ? activePillStyle : pillStyle}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={panelStyle}>
+          <div style={labelStyle}>거리</div>
+          <div style={pillRowStyle}>
+            {DISTANCE_OPTIONS.map((opt) => {
+              const active = cameraDistance === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setCameraDistance(opt.key)}
+                  style={active ? activePillStyle : pillStyle}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 8, fontSize: 13, opacity: 0.72 }}>
+            현재 거리: {getCameraDistanceLabel(cameraDistance)}
+          </div>
+        </div>
+
+        <div style={panelStyle}>
+          <div style={labelStyle}>포즈 선택 / 수량</div>
+          <div style={poseCountWrapStyle}>
+            <div style={pillRowStyle}>
+              {POSE_CATEGORY_OPTIONS.map((opt) => {
+                const active = poseCategories.includes(opt.key);
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => togglePoseCategory(opt.key)}
+                    style={active ? activePillStyle : pillStyle}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={pillRowStyle}>
+              {POSE_COUNT_OPTIONS.map((count) => {
+                const active = poseCount === count;
+                return (
+                  <button
+                    key={count}
+                    type="button"
+                    onClick={() => setPoseCount(count)}
+                    style={active ? activeCountPillStyle : countPillStyle}
+                  >
+                    {count}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ marginTop: 10, fontSize: 13, opacity: 0.72 }}>
+            선택 포즈 {poseCategories.length}개 · 총 생성 수량 {poseCount}개 ·{" "}
+            {getShotTypeLabel(shotType)} · {getCameraDistanceLabel(cameraDistance)}
+          </div>
+        </div>
+
+        <div style={grid3Style}>
+          <SelectBox
+            title="시선"
+            value={gazeOption}
+            onChange={setGazeOption}
+            options={GAZE_OPTIONS}
+          />
+          <SelectBox
+            title="표정"
+            value={expressionOption}
+            onChange={setExpressionOption}
+            options={EXPRESSION_OPTIONS}
+          />
+          <SelectBox
+            title="헤어스타일"
+            value={hairstyle}
+            onChange={setHairstyle}
+            options={HAIR_OPTIONS}
+          />
+        </div>
+
+        <div style={panelStyle}>
+          <div style={labelStyle}>추가 요청사항</div>
+          <textarea
+            value={extraInstructions}
+            onChange={(e) => setExtraInstructions(e.target.value)}
+            placeholder="예: 상세페이지용, 과한 연출 금지, 쇼핑몰 느낌, 원단감 최우선, 얼굴은 동일하게 유지"
+            style={{ ...textareaStyle, minHeight: 110 }}
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 20 }}>
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            style={{
+              ...primaryButtonStyle,
+              opacity: loading ? 0.7 : 1,
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+          >
+            {loading ? "생성 중..." : "생성하기"}
+          </button>
+
+          <button onClick={clearAll} style={ghostButtonStyle}>
+            초기화
+          </button>
+
+          {!!prompts.length && (
+            <button onClick={() => copyText(allPromptsText)} style={ghostButtonStyle}>
+              전체 프롬프트 복사
+            </button>
+          )}
+
+          {!!prompts.some((item) => item.imageDataUrl) && (
+            <button onClick={downloadAllImages} style={ghostButtonStyle}>
+              {downloadingAll ? "이미지 다운로드 중..." : "전체 이미지 다운로드"}
+            </button>
           )}
         </div>
+
+        {!!error && <div style={errorBoxStyle}>{error}</div>}
+
+        {!!referenceMapText && (
+          <div style={resultCardStyle}>
+            <div style={resultTitleStyle}>참조 이미지 번호</div>
+            <pre style={preStyle}>{referenceMapText}</pre>
+          </div>
+        )}
+
+        {analysisSummary && (
+          <div style={resultCardStyle}>
+            <div style={resultTitleStyle}>AI 분석 요약</div>
+            <div style={analysisGridStyle}>
+              <div style={miniCardStyle}>
+                <div style={miniTitleStyle}>의상 요약</div>
+                <div>{analysisSummary.clothingSummary || "-"}</div>
+              </div>
+              <div style={miniCardStyle}>
+                <div style={miniTitleStyle}>무드</div>
+                <div>{analysisSummary.overallMood || "-"}</div>
+              </div>
+              <div style={miniCardStyle}>
+                <div style={miniTitleStyle}>헤어 요약</div>
+                <div>{analysisSummary.hairSummary || "-"}</div>
+              </div>
+              <div style={miniCardStyle}>
+                <div style={miniTitleStyle}>추천 코디</div>
+                <div>{analysisSummary.recommendedBottom || "-"}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!!prompts.length && (
+          <div style={{ marginTop: 28 }}>
+            <div style={resultTitleStyle}>생성된 프롬프트</div>
+            <div style={{ display: "grid", gap: 14 }}>
+              {prompts.map((item) => (
+                <div key={item.id} style={resultCardStyle}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800 }}>
+                        {item.title}
+                      </div>
+                      <div style={metaTextStyle}>
+                        {item.poseCategoryLabel} | {item.shotTypeLabel} |{" "}
+                        {item.distanceLabel}
+                      </div>
+                      <div style={metaTextStyle}>포즈: {item.poseLabel}</div>
+                      <div style={metaTextStyle}>시선: {item.gaze}</div>
+                      <div style={metaTextStyle}>표정: {item.expression}</div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => copyText(item.prompt)}
+                        style={ghostButtonStyle}
+                      >
+                        이 프롬프트 복사
+                      </button>
+
+                      {item.imageDataUrl && (
+                        <button
+                          onClick={() =>
+                            downloadImage(
+                              item.imageDataUrl as string,
+                              `${item.title.replace(/[^\w\-가-힣]+/g, "_")}.png`
+                            )
+                          }
+                          style={ghostButtonStyle}
+                        >
+                          이미지 다운로드
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <pre style={compactPreStyle}>{item.prompt}</pre>
+
+                  {item.imageError && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: 12,
+                        borderRadius: 12,
+                        background: "#fff1f2",
+                        color: "#9f1239",
+                        border: "1px solid #fecdd3",
+                        fontSize: 13,
+                      }}
+                    >
+                      이미지 생성 실패: {item.imageError}
+                    </div>
+                  )}
+
+                  {item.imageDataUrl && (
+                    <div style={{ marginTop: 14 }}>
+                      <img
+                        src={item.imageDataUrl}
+                        alt={item.title}
+                        onClick={() =>
+                          setLightboxImage({
+                            src: item.imageDataUrl as string,
+                            title: item.title,
+                          })
+                        }
+                        style={{
+                          width: "100%",
+                          maxWidth: 560,
+                          borderRadius: 16,
+                          border: "1px solid #e5e7eb",
+                          display: "block",
+                          cursor: "zoom-in",
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
 
-function PromptBox({ title, placeholder, value, onChange }: PromptBoxProps) {
-  return (
-    <div className="rounded-[24px] border-2 border-[#7aa74f] bg-white p-4 shadow-[0_8px_24px_rgba(76,96,70,0.05)]">
-      <h4 className="text-xl font-extrabold text-[#187d72]">{title}</h4>
-      <p className="mt-1 text-sm text-[#7f8b81]">
-        원하는 내용을 자세히 입력해주세요.
-      </p>
-
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="mt-4 min-h-[100px] w-full rounded-2xl border-2 border-[#d8e5cd] bg-[#fcfdf9] px-4 py-3 text-sm outline-none placeholder:text-[#9aa59d] focus:border-[#96be59]"
-      />
-    </div>
-  );
-}
-
-function SelectPromptBox({
-  title,
-  selectValue,
-  onSelectChange,
-  options,
-  value,
-  onTextChange,
-  placeholder,
-}: SelectPromptBoxProps) {
-  return (
-    <div className="rounded-[24px] border-2 border-[#7aa74f] bg-white p-5 shadow-[0_8px_24px_rgba(76,96,70,0.05)]">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h4 className="text-xl font-extrabold text-[#187d72]">{title}</h4>
-          <p className="mt-1 text-sm text-[#7f8b81]">
-            원하는 옵션을 선택하거나 직접 입력해주세요.
-          </p>
-        </div>
-
-        <select
-          value={selectValue}
-          onChange={(e) => onSelectChange(e.target.value)}
-          className="rounded-2xl bg-[#27b0a4] px-5 py-3 text-sm font-bold text-white outline-none"
+      {lightboxImage && (
+        <div
+          onClick={() => setLightboxImage(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.72)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            zIndex: 9999,
+          }}
         >
-          {options.map((option) => (
-            <option
-              key={option.value}
-              value={option.value}
-              className="text-black"
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "95vw",
+              maxHeight: "95vh",
+              background: "#fff",
+              borderRadius: 20,
+              padding: 16,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "center",
+                marginBottom: 12,
+                flexWrap: "wrap",
+              }}
             >
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+              <div style={{ fontWeight: 800, fontSize: 18 }}>
+                {lightboxImage.title}
+              </div>
 
-      <textarea
-        value={value}
-        onChange={(e) => onTextChange(e.target.value)}
-        placeholder={placeholder}
-        className="mt-4 min-h-[90px] w-full rounded-2xl border-2 border-[#d8e5cd] bg-[#fcfdf9] px-4 py-3 text-sm outline-none placeholder:text-[#9aa59d] focus:border-[#96be59]"
-      />
-    </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  onClick={() =>
+                    downloadImage(
+                      lightboxImage.src,
+                      `${lightboxImage.title.replace(/[^\w\-가-힣]+/g, "_")}.png`
+                    )
+                  }
+                  style={ghostButtonStyle}
+                >
+                  다운로드
+                </button>
+
+                <button
+                  onClick={() => setLightboxImage(null)}
+                  style={ghostButtonStyle}
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+
+            <img
+              src={lightboxImage.src}
+              alt={lightboxImage.title}
+              style={{
+                maxWidth: "90vw",
+                maxHeight: "80vh",
+                display: "block",
+                borderRadius: 14,
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </main>
   );
 }
+
+const pageStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  background: "#f5f6f8",
+  padding: "28px 16px 72px",
+};
+
+const containerStyle: React.CSSProperties = {
+  maxWidth: 1240,
+  margin: "0 auto",
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  fontSize: 18,
+  fontWeight: 800,
+  marginTop: 26,
+  marginBottom: 12,
+};
+
+const uploadGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+  gap: 16,
+};
+
+const grid4Style: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 14,
+};
+
+const grid3Style: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+  gap: 14,
+  marginTop: 14,
+};
+
+const panelStyle: React.CSSProperties = {
+  background: "#ffffff",
+  border: "1px solid #dfe3e8",
+  borderRadius: 18,
+  padding: 14,
+  boxShadow: "0 4px 16px rgba(15, 23, 42, 0.04)",
+  marginTop: 14,
+};
+
+const uploadCardStyle: React.CSSProperties = {
+  background: "#ffffff",
+  border: "1px solid #dfe3e8",
+  borderRadius: 18,
+  padding: 14,
+  boxShadow: "0 4px 16px rgba(15, 23, 42, 0.04)",
+};
+
+const labelRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  marginBottom: 12,
+};
+
+const uploadTitle: React.CSSProperties = {
+  fontSize: 20,
+  fontWeight: 800,
+  lineHeight: 1.2,
+};
+
+const uploadDesc: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.72,
+  marginTop: 4,
+};
+
+const labelStyle: React.CSSProperties = {
+  fontWeight: 700,
+  fontSize: 14,
+  marginBottom: 10,
+};
+
+const selectStyle: React.CSSProperties = {
+  width: "100%",
+  height: 44,
+  borderRadius: 12,
+  border: "1px solid #cfd6df",
+  padding: "0 12px",
+  background: "#fff",
+  fontSize: 15,
+};
+
+const textareaStyle: React.CSSProperties = {
+  width: "100%",
+  minHeight: 88,
+  resize: "vertical",
+  borderRadius: 12,
+  border: "1px solid #cfd6df",
+  padding: "12px",
+  fontSize: 14,
+  lineHeight: 1.5,
+  background: "#fff",
+};
+
+const dropZoneStyle: React.CSSProperties = {
+  border: "1.5px dashed #c8d0da",
+  borderRadius: 16,
+  background: "#fafbfc",
+  minHeight: 92,
+  padding: "18px 14px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexDirection: "column",
+  textAlign: "center",
+  cursor: "pointer",
+};
+
+const dropZoneActiveStyle: React.CSSProperties = {
+  border: "1.5px dashed #5b7cff",
+  background: "#eef3ff",
+};
+
+const previewGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))",
+  gap: 10,
+  marginTop: 12,
+};
+
+const previewBoxStyle: React.CSSProperties = {
+  position: "relative",
+  borderRadius: 12,
+  overflow: "hidden",
+  border: "1px solid #e5e7eb",
+  background: "#fff",
+};
+
+const previewImageStyle: React.CSSProperties = {
+  width: "100%",
+  aspectRatio: "1 / 1",
+  objectFit: "cover",
+  display: "block",
+};
+
+const previewNameStyle: React.CSSProperties = {
+  fontSize: 11,
+  lineHeight: 1.35,
+  padding: "6px 7px",
+  borderTop: "1px solid #eef2f7",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const removeButtonStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 6,
+  right: 6,
+  width: 24,
+  height: 24,
+  borderRadius: "999px",
+  border: "none",
+  background: "rgba(17, 24, 39, 0.82)",
+  color: "#fff",
+  fontSize: 16,
+  cursor: "pointer",
+  lineHeight: 1,
+};
+
+const pillRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const pillStyle: React.CSSProperties = {
+  height: 40,
+  padding: "0 16px",
+  borderRadius: 999,
+  border: "1px solid #cfd6df",
+  background: "#fff",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const activePillStyle: React.CSSProperties = {
+  ...pillStyle,
+  border: "1px solid #6d7df5",
+  background: "#eef2ff",
+};
+
+const countPillStyle: React.CSSProperties = {
+  height: 44,
+  minWidth: 54,
+  padding: "0 16px",
+  borderRadius: 14,
+  border: "1px solid #cfd6df",
+  background: "#fff",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const activeCountPillStyle: React.CSSProperties = {
+  ...countPillStyle,
+  border: "1px solid #111827",
+  background: "#111827",
+  color: "#fff",
+};
+
+const poseCountWrapStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 16,
+  flexWrap: "wrap",
+  alignItems: "center",
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  height: 46,
+  padding: "0 20px",
+  border: "none",
+  borderRadius: 14,
+  background: "#111827",
+  color: "#fff",
+  fontWeight: 800,
+  fontSize: 16,
+};
+
+const ghostButtonStyle: React.CSSProperties = {
+  height: 46,
+  padding: "0 18px",
+  border: "1px solid #cfd6df",
+  borderRadius: 14,
+  background: "#fff",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const smallButton: React.CSSProperties = {
+  height: 36,
+  padding: "0 12px",
+  border: "1px solid #cfd6df",
+  borderRadius: 12,
+  background: "#fff",
+  fontWeight: 700,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const hintTextStyle: React.CSSProperties = {
+  fontSize: 12,
+  opacity: 0.65,
+  marginTop: 6,
+};
+
+const errorBoxStyle: React.CSSProperties = {
+  marginTop: 16,
+  padding: 14,
+  borderRadius: 14,
+  background: "#fff1f2",
+  color: "#9f1239",
+  border: "1px solid #fecdd3",
+};
+
+const resultCardStyle: React.CSSProperties = {
+  background: "#ffffff",
+  border: "1px solid #dfe3e8",
+  borderRadius: 18,
+  padding: 18,
+  boxShadow: "0 4px 16px rgba(15, 23, 42, 0.04)",
+};
+
+const resultTitleStyle: React.CSSProperties = {
+  fontSize: 20,
+  fontWeight: 800,
+  marginBottom: 12,
+};
+
+const preStyle: React.CSSProperties = {
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  fontSize: 13,
+  lineHeight: 1.65,
+  background: "#f8fafc",
+  borderRadius: 14,
+  padding: 14,
+  border: "1px solid #e5e7eb",
+  overflowX: "auto",
+};
+
+const compactPreStyle: React.CSSProperties = {
+  ...preStyle,
+  marginTop: 14,
+  maxHeight: 130,
+  overflowY: "auto",
+  fontSize: 12,
+};
+
+const analysisGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
+};
+
+const miniCardStyle: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+  padding: 14,
+  background: "#fafafa",
+};
+
+const miniTitleStyle: React.CSSProperties = {
+  fontWeight: 800,
+  marginBottom: 8,
+  fontSize: 14,
+};
+
+const metaTextStyle: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.72,
+  marginTop: 4,
+};
