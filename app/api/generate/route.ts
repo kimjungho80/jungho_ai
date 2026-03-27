@@ -244,8 +244,8 @@ function distributePoseCategories(
   count: number
 ): PoseCategoryOption[] {
   const list: PoseCategoryOption[] = categories.length
-  ? categories
-  : ["recommended"];
+    ? categories
+    : ["recommended"];
   return Array.from({ length: count }, (_, i) => list[i % list.length]);
 }
 
